@@ -1,47 +1,38 @@
 from flask import Flask, render_template, request, redirect, url_for, jsonify, session, flash
 from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'your-secret-key'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///shop.db'
 db = SQLAlchemy(app)
 
 # Database Models
-class User(db.Model):
+class Product(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(200), nullable=False)
-    tasks = db.relationship('Task', backref='user', lazy=True)
-
-class Task(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    title = db.Column(db.String(100), nullable=False)
+    name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
-    due_date = db.Column(db.DateTime)
-    completed = db.Column(db.Boolean, default=False)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    price = db.Column(db.Float, nullable=False)
+    stock = db.Column(db.Integer, nullable=False)
+    image_url = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+class CartItem(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    product_id = db.Column(db.Integer, db.ForeignKey('product.id'), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False, default=1)
+    session_id = db.Column(db.String(100), nullable=False)
+    product = db.relationship('Product', backref='cart_items')
 
 # Create database tables
 with app.app_context():
     db.create_all()
 
-# Login required decorator
-def login_required(f):
-    def wrapper(*args, **kwargs):
-        if 'user_id' not in session:
-            flash('Please login first')
-            return redirect(url_for('login'))
-        return f(*args, **kwargs)
-    wrapper.__name__ = f.__name__
-    return wrapper
-
 # Home Route
 @app.route('/')
 def home():
-    return render_template('home.html')
+    products = Product.query.all()
+    return render_template('home.html', products=products)
 
 # About Route
 @app.route('/about')
@@ -56,91 +47,74 @@ def contact():
 # API Route for JSON Data
 @app.route('/api/data')
 def api_data():
-    tasks = Task.query.all()
-    data = [{"id": t.id, "title": t.title, "completed": t.completed} for t in tasks]
+    tasks = Product.query.all()
+    data = [{"id": t.id, "title": t.name, "completed": t.stock} for t in tasks]
     return jsonify({"status": "success", "data": data})
 
-@app.route('/register', methods=['GET', 'POST'])
-def register():
+@app.route('/product/<int:product_id>')
+def product_detail(product_id):
+    product = Product.query.get_or_404(product_id)
+    return render_template('product_detail.html', product=product)
+
+@app.route('/admin/products')
+def admin_products():
+    products = Product.query.all()
+    return render_template('admin/products.html', products=products)
+
+@app.route('/admin/product/add', methods=['GET', 'POST'])
+def add_product():
     if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        
-        if User.query.filter_by(username=username).first():
-            flash('Username already exists')
-            return redirect(url_for('register'))
-        
-        hashed_password = generate_password_hash(password)
-        new_user = User(username=username, password=hashed_password)
-        db.session.add(new_user)
-        db.session.commit()
-        
-        flash('Registration successful! Please login.')
-        return redirect(url_for('login'))
-    
-    return render_template('register.html')
-
-@app.route('/login', methods=['GET', 'POST'])
-def login():
-    if request.method == 'POST':
-        username = request.form['username']
-        password = request.form['password']
-        
-        user = User.query.filter_by(username=username).first()
-        if user and check_password_hash(user.password, password):
-            session['user_id'] = user.id
-            flash('Logged in successfully!')
-            return redirect(url_for('dashboard'))
-        
-        flash('Invalid username or password')
-    return render_template('login.html')
-
-@app.route('/logout')
-def logout():
-    session.pop('user_id', None)
-    flash('Logged out successfully!')
-    return redirect(url_for('home'))
-
-@app.route('/dashboard')
-@login_required
-def dashboard():
-    user = User.query.get(session['user_id'])
-    tasks = Task.query.filter_by(user_id=user.id).order_by(Task.due_date).all()
-    return render_template('dashboard.html', tasks=tasks, user=user)
-
-@app.route('/task/add', methods=['GET', 'POST'])
-@login_required
-def add_task():
-    if request.method == 'POST':
-        title = request.form['title']
-        description = request.form['description']
-        due_date = datetime.strptime(request.form['due_date'], '%Y-%m-%d')
-        
-        new_task = Task(
-            title=title,
-            description=description,
-            due_date=due_date,
-            user_id=session['user_id']
+        new_product = Product(
+            name=request.form['name'],
+            description=request.form['description'],
+            price=float(request.form['price']),
+            stock=int(request.form['stock']),
+            image_url=request.form['image_url']
         )
-        db.session.add(new_task)
+        db.session.add(new_product)
         db.session.commit()
-        
-        flash('Task added successfully!')
-        return redirect(url_for('dashboard'))
-    
-    return render_template('add_task.html')
+        flash('Product added successfully!')
+        return redirect(url_for('admin_products'))
+    return render_template('admin/add_product.html')
 
-@app.route('/task/<int:task_id>/toggle')
-@login_required
-def toggle_task(task_id):
-    task = Task.query.get_or_404(task_id)
-    if task.user_id != session['user_id']:
-        flash('Unauthorized access')
-        return redirect(url_for('dashboard'))
+@app.route('/cart')
+def view_cart():
+    if 'cart_id' not in session:
+        session['cart_id'] = str(datetime.utcnow().timestamp())
+    cart_items = CartItem.query.filter_by(session_id=session['cart_id']).all()
+    total = sum(item.product.price * item.quantity for item in cart_items)
+    return render_template('cart.html', cart_items=cart_items, total=total)
+
+@app.route('/cart/add/<int:product_id>', methods=['POST'])
+def add_to_cart(product_id):
+    if 'cart_id' not in session:
+        session['cart_id'] = str(datetime.utcnow().timestamp())
     
-    task.completed = not task.completed
+    quantity = int(request.form.get('quantity', 1))
+    product = Product.query.get_or_404(product_id)
+    
+    if product.stock < quantity:
+        flash('Not enough stock available!')
+        return redirect(url_for('product_detail', product_id=product_id))
+    
+    cart_item = CartItem.query.filter_by(
+        product_id=product_id,
+        session_id=session['cart_id']
+    ).first()
+    
+    if cart_item:
+        cart_item.quantity += quantity
+    else:
+        cart_item = CartItem(
+            product_id=product_id,
+            quantity=quantity,
+            session_id=session['cart_id']
+        )
+        db.session.add(cart_item)
+    
     db.session.commit()
-    return redirect(url_for('dashboard'))
+    flash('Product added to cart!')
+    return redirect(url_for('view_cart'))
 
 if __name__ == '__main__':
     app.run(debug=True)
