@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block title %}Home - My Flask App{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2 text-center">
+        <h1 class="display-4">Welcome to My Flask App</h1>
+        <p class="lead">A modern web application built with Flask and Python</p>
+        
+        <div class="card mt-4">
+            <div class="card-body">
+                <h5 class="card-title">Try it out!</h5>
+                <div class="mb-3">
+                    <input type="text" id="nameInput" class="form-control" placeholder="Enter your name">
+                </div>
+                <button onclick="greet()" class="btn btn-primary">Greet Me!</button>
+                <p id="greeting" class="mt-3"></p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function greet() {
+    const name = document.getElementById('nameInput').value;
+    document.getElementById('greeting').textContent = `Hello, ${name}! Welcome to our app.`;
+}
+</script>
+{% endblock %} 
