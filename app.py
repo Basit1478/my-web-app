@@ -52,7 +52,8 @@ if st.session_state.current_user:
     st.sidebar.write(f"👤 **User:** {st.session_state.current_user}")
     st.sidebar.write(f"🔥 **Streak:** {user_data['streak']} days")
     st.sidebar.write(f"🌟 **Points:** {user_data['points']}")
-    st.write("Made with ❤️ Basit Ali")
+    
+    st.sidebar.write("Made with ❤️ Basit Ali")
     # Main App Title
     st.title("🌱 Growth Mindset Challenge")
 
