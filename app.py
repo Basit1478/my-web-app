@@ -125,7 +125,7 @@ if st.session_state.current_user:
                 st.success("All user data has been wiped!")
 
     st.write("---")
-    st.write("Made with ❤️ using Streamlit")
+    st.write("Made with ❤️ Basit Ali")
 
     # 🚀 New Feature: File Upload & CSV Conversion
     st.header("📁 Upload a File and Convert to CSV")
